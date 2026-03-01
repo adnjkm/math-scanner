@@ -36,6 +36,25 @@ def format_question_block(q: dict) -> str:
     )
 
 
+def wrap_latex_document(body: str, title: str = "Calculus Worksheet") -> str:
+    """Wrap pre-formatted LaTeX body content in a complete compilable document."""
+    return (
+        f"\\documentclass[12pt]{{article}}\n"
+        f"\\usepackage{{amsmath,amssymb,mathtools}}\n"
+        f"\\usepackage[margin=2cm]{{geometry}}\n"
+        f"\\usepackage{{fancyhdr}}\n"
+        f"\\pagestyle{{fancy}}\n"
+        f"\\fancyhf{{}}\n"
+        f"\\lhead{{{title}}}\n"
+        f"\\rhead{{Name: \\underline{{\\hspace{{5cm}}}}}}\n"
+        f"\\rfoot{{\\thepage}}\n"
+        f"\\renewcommand{{\\headrulewidth}}{{0.4pt}}\n\n"
+        f"\\begin{{document}}\n\n"
+        f"{body}\n\n"
+        f"\\end{{document}}\n"
+    )
+
+
 def generate_latex(questions: list[dict]) -> str:
     """Build a complete LaTeX document string from a list of question dicts."""
     preamble = r"""\documentclass[12pt]{article}
