@@ -1,9 +1,7 @@
-import base64
 import json
 import re
-from pathlib import Path
 
-import anthropic
+import ollama
 
 VISION_PROMPT = """You are a math question extractor. Identify every distinct numbered/lettered exercise on this textbook page. Return ONLY a valid JSON array with no explanation, no markdown fences. Each object has:
   "number": as shown (e.g. "1", "2a")
@@ -17,25 +15,8 @@ VISION_PROMPT = """You are a math question extractor. Identify every distinct nu
     6  = default if unsure"""
 
 
-def encode_image_base64(path: str) -> tuple[str, str]:
-    """Return (base64_str, media_type) for an image file."""
-    suffix = Path(path).suffix.lower()
-    media_types = {
-        ".png": "image/png",
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".gif": "image/gif",
-        ".webp": "image/webp",
-    }
-    media_type = media_types.get(suffix, "image/png")
-    with open(path, "rb") as f:
-        data = base64.standard_b64encode(f.read()).decode("utf-8")
-    return data, media_type
-
-
 def parse_questions_json(raw_text: str) -> list[dict]:
-    """Parse Claude's response into a list of question dicts."""
-    # Strip markdown code fences if present
+    """Parse model response into a list of question dicts."""
     text = raw_text.strip()
     text = re.sub(r"^```(?:json)?\s*", "", text)
     text = re.sub(r"\s*```$", "", text)
@@ -64,34 +45,15 @@ def parse_questions_json(raw_text: str) -> list[dict]:
     return validated
 
 
-def extract_questions_from_image(path: str, api_key: str) -> list[dict]:
-    """Call Claude Vision to extract questions from a single image."""
-    client = anthropic.Anthropic(api_key=api_key)
-    image_data, media_type = encode_image_base64(path)
-
-    message = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=4096,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": media_type,
-                            "data": image_data,
-                        },
-                    },
-                    {
-                        "type": "text",
-                        "text": VISION_PROMPT,
-                    },
-                ],
-            }
-        ],
+def extract_questions_from_image(path: str, model: str = "llama3.2-vision") -> list[dict]:
+    """Call a local Ollama vision model to extract questions from a single image."""
+    response = ollama.chat(
+        model=model,
+        messages=[{
+            "role": "user",
+            "content": VISION_PROMPT,
+            "images": [path],
+        }],
     )
-
-    raw_text = message.content[0].text
+    raw_text = response["message"]["content"]
     return parse_questions_json(raw_text)

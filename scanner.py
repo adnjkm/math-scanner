@@ -8,9 +8,6 @@ import sys
 import tempfile
 from pathlib import Path
 
-import anthropic
-from dotenv import load_dotenv
-
 from src.extractor import extract_questions_from_image
 from src.latex_gen import generate_latex
 from src.compiler import compile_latex
@@ -31,8 +28,6 @@ def pdf_to_images(pdf_path: str, dpi: int) -> list[str]:
 
 
 def main() -> None:
-    load_dotenv()
-
     parser = argparse.ArgumentParser(
         description="Extract math questions from a PDF or image and generate a LaTeX worksheet."
     )
@@ -48,22 +43,16 @@ def main() -> None:
         default=300,
         help="DPI for PDF-to-image conversion (default: 300)",
     )
+    parser.add_argument(
+        "--model",
+        default="llama3.2-vision",
+        help="Ollama vision model to use (default: llama3.2-vision)",
+    )
     args = parser.parse_args()
 
-    # Validate input file
     input_path = Path(args.input)
     if not input_path.exists():
         print(f"Error: input file not found: {args.input}", file=sys.stderr)
-        sys.exit(1)
-
-    # Validate API key
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        print(
-            "Error: ANTHROPIC_API_KEY is not set.\n"
-            "Copy .env.example to .env and add your key.",
-            file=sys.stderr,
-        )
         sys.exit(1)
 
     suffix = input_path.suffix.lower()
@@ -84,8 +73,8 @@ def main() -> None:
 
         all_questions = []
         for i, img_path in enumerate(image_paths, start=1):
-            print(f"Extracting questions from page {i}/{len(image_paths)}...")
-            questions = extract_questions_from_image(img_path, api_key)
+            print(f"Extracting questions from page {i}/{len(image_paths)} (model: {args.model})...")
+            questions = extract_questions_from_image(img_path, model=args.model)
             all_questions.extend(questions)
             print(f"  Found {len(questions)} question(s).")
 
@@ -105,9 +94,6 @@ def main() -> None:
         compile_latex(latex_source, args.output)
         print(f"Done. Worksheet saved to: {args.output}")
 
-    except anthropic.APIError as e:
-        print(f"Anthropic API error: {e}", file=sys.stderr)
-        sys.exit(1)
     except RuntimeError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
