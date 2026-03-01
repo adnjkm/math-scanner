@@ -36,6 +36,10 @@ def parse_questions_json(raw_text: str) -> list[dict]:
     if match:
         text = match.group(0)
 
+    # Fix invalid JSON escape sequences from LaTeX (e.g. \frac, \int, \sum)
+    # JSON only allows: \" \\ \/ \b \f \n \r \t \uXXXX
+    text = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', text)
+
     questions = json.loads(text)
 
     if not isinstance(questions, list):

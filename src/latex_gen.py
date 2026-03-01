@@ -22,10 +22,22 @@ def escape_latex_special_chars(text: str) -> str:
     return _SPECIAL_CHARS.sub(lambda m: _LATEX_ESCAPE_MAP[m.group(0)], text)
 
 
+def auto_wrap_math(text: str) -> str:
+    """Wrap bare math expressions (containing ^ or _) in $...$ if not already wrapped."""
+    if '$' in text or r'\[' in text:
+        return text  # model already used math mode, trust it
+    def wrap_if_math(m: re.Match) -> str:
+        s = m.group(0)
+        if re.search(r'[\^_]|\\[a-zA-Z]', s):
+            return f'${s}$'
+        return s
+    return re.sub(r'[a-zA-Z0-9\^_+\-*/=(){}|\\,.]+', wrap_if_math, text)
+
+
 def format_question_block(q: dict) -> str:
     """Format a single question dict into a LaTeX block."""
     number = escape_latex_special_chars(q["number"])
-    latex_body = q["latex"]  # not escaped — already LaTeX
+    latex_body = auto_wrap_math(q["latex"])
     space_cm = q["space_cm"]
 
     return (

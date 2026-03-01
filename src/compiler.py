@@ -7,13 +7,20 @@ from pathlib import Path
 def find_pdflatex() -> str:
     """Return path to pdflatex, or raise RuntimeError with install instructions."""
     path = shutil.which("pdflatex")
-    if path is None:
-        raise RuntimeError(
-            "pdflatex not found. Install it with:\n"
-            "  brew install --cask mactex-no-gui\n"
-            "Then restart your terminal."
-        )
-    return path
+    if path:
+        return path
+    # macOS TeX Live installs outside PATH until terminal restart — check directly
+    import glob
+    candidates = glob.glob("/usr/local/texlive/*/bin/universal-darwin/pdflatex") + \
+                 glob.glob("/usr/local/texlive/*/bin/aarch64-darwin/pdflatex") + \
+                 glob.glob("/Library/TeX/texbin/pdflatex")
+    if candidates:
+        return sorted(candidates)[-1]  # pick most recent year
+    raise RuntimeError(
+        "pdflatex not found. Install it with:\n"
+        "  brew install --cask basictex\n"
+        "Then restart your terminal."
+    )
 
 
 def compile_latex(latex_source: str, output_path: str) -> None:
