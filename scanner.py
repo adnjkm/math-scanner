@@ -8,8 +8,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from src.extractor import extract_questions_from_image
-from src.latex_gen import generate_latex
+from src.claude_extractor import extract_page_latex
+from src.latex_gen import wrap_latex_document
 from src.compiler import compile_latex
 
 
@@ -44,9 +44,14 @@ def main() -> None:
         help="DPI for PDF-to-image conversion (default: 300)",
     )
     parser.add_argument(
-        "--model",
-        default="llama3.2-vision",
-        help="Ollama vision model to use (default: llama3.2-vision)",
+        "--claude-model",
+        default=None,
+        help="Claude model to use (default: Claude's own default)",
+    )
+    parser.add_argument(
+        "--title",
+        default="Calculus Worksheet",
+        help="Worksheet title in the header (default: Calculus Worksheet)",
     )
     args = parser.parse_args()
 
@@ -71,24 +76,12 @@ def main() -> None:
             print(f"Error: unsupported file type '{suffix}'", file=sys.stderr)
             sys.exit(1)
 
-        all_questions = []
+        page_bodies = []
         for i, img_path in enumerate(image_paths, start=1):
-            print(f"Extracting questions from page {i}/{len(image_paths)} (model: {args.model})...")
-            questions = extract_questions_from_image(img_path, model=args.model)
-            all_questions.extend(questions)
-            print(f"  Found {len(questions)} question(s).")
+            print(f"Processing page {i}/{len(image_paths)} with Claude...")
+            page_bodies.append(extract_page_latex(img_path, model=args.claude_model))
 
-        if not all_questions:
-            print("No questions found in the input. Exiting.", file=sys.stderr)
-            sys.exit(1)
-
-        # Renumber questions globally across pages
-        for idx, q in enumerate(all_questions, start=1):
-            q["number"] = str(idx)
-
-        print(f"Total questions extracted: {len(all_questions)}")
-        print("Generating LaTeX...")
-        latex_source = generate_latex(all_questions)
+        latex_source = wrap_latex_document("\n\n".join(page_bodies), title=args.title)
 
         print(f"Compiling PDF → {args.output}")
         compile_latex(latex_source, args.output)
