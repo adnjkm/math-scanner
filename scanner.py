@@ -116,9 +116,24 @@ def main() -> None:
 
             page_mmds = []
             for i, img_path in enumerate(image_paths, start=1):
+                img = Path(img_path)
+
+                # Step 1: nougat OCR — cached as <image>.mmd
                 print(f"Processing page {i}/{len(image_paths)}: running nougat...")
                 raw_mmd = extract_raw_mmd(img_path)
-                page_mmds.append(format_mmd(raw_mmd))
+
+                # Step 2: Claude formatting — cached as <image>_formatted.mmd
+                fmt_cache = img.with_name(img.stem + "_formatted.mmd")
+                if fmt_cache.exists():
+                    print(f"  Using cached claude output: {fmt_cache.name}")
+                    formatted = fmt_cache.read_text(encoding="utf-8")
+                else:
+                    print(f"  Formatting with claude...")
+                    formatted = format_mmd(raw_mmd)
+                    fmt_cache.write_text(formatted, encoding="utf-8")
+                    print(f"  Saved claude output to: {fmt_cache.name}")
+
+                page_mmds.append(formatted)
 
             combined_mmd = "\n\n".join(page_mmds)
             print(f"Rendering .mmd → {args.output}")

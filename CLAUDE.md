@@ -54,6 +54,56 @@ Output is written to `output/worksheet.pdf` by default (gitignored).
 
 ---
 
+## Nougat Backend (`--backend nougat`)
+
+### What it does
+Nougat (Meta's neural OCR) replaces Claude's vision step for reading the image.
+Pipeline: image → padded letter-size PDF → nougat OCR → `.mmd` → Claude formats → pandoc → PDF.
+
+### Additional system dependencies
+```bash
+brew install pandoc       # renders .mmd → PDF
+# Python must be 3.11 — nougat is incompatible with 3.12+ and segfaults on 3.14
+```
+
+### Python version requirement: MUST be 3.11
+Nougat's C extensions (torch) segfault on Python 3.14. Always use Python 3.11:
+```bash
+brew install pyenv
+pyenv install 3.11
+/Users/<you>/.pyenv/versions/3.11.x/bin/python3 -m venv .venv
+```
+
+### Pinned transitive dependencies (already in requirements.txt)
+These MUST stay pinned or nougat will break at import time:
+
+| Package | Pin | Why |
+|---|---|---|
+| `transformers` | `>=4.25.1,<4.38.0` | 4.38 added `cache_position` kwarg that breaks nougat's BARTDecoder |
+| `albumentations` | `>=1.0.0,<2.0.0` | 2.0 changed `ImageCompression` API (int → string) |
+| `pypdfium2` | `>=4.0.0,<5.0.0` | 5.0 removed the `render()` method nougat uses |
+| `timm` | `==0.5.4` | exact pin from nougat's own metadata — do not upgrade |
+
+### Nougat output caching
+Nougat is slow (~30–60s/page). Both intermediate outputs are cached next to the input image:
+- `textbook4.mmd` — raw nougat OCR output (skip nougat on re-run)
+- `textbook4_formatted.mmd` — Claude-formatted output (skip Claude on re-run)
+
+Delete these files to force a re-run of the respective step.
+
+### Known limitations
+- Nougat produces **empty output** for sparse/wide-format images (e.g. cropped strips, multi-column grids with lots of whitespace). Falls back to `--backend claude` for those.
+- Nougat hallucinates sub-question labels (outputs all as `a)` instead of `a) b) c)`). This is an OCR error in the model, not fixable without retraining.
+- The `claude` CLI **cannot be called as a subprocess from inside an active Claude Code session** even with `CLAUDECODE` unset — it times out. Format step must be run outside Claude Code, or use a different formatting approach.
+
+### Run with nougat backend
+```bash
+NO_ALBUMENTATIONS_UPDATE=1 .venv/bin/python3 scanner.py textbook4.png --backend nougat
+```
+The `NO_ALBUMENTATIONS_UPDATE=1` env var suppresses a harmless upgrade warning from albumentations.
+
+---
+
 ## Git Workflow
 
 After completing any meaningful unit of work, commit and push to GitHub so progress is never lost:

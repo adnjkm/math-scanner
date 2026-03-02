@@ -1,6 +1,6 @@
 """src/nougat_extractor.py — Nougat OCR + Claude formatting for a single page image."""
 
-import re
+import os
 import shutil
 import subprocess
 import sys
@@ -21,17 +21,35 @@ def _nougat_bin() -> str:
     )
 
 
-def format_mmd(raw_mmd: str) -> str:
-    """Add spacing and indentation to raw nougat .mmd output using simple string logic."""
-    # Put each numbered question (1. 2. 3. ...) on its own line with a blank line before it
-    text = re.sub(r'(?<!\n)(\d+\. )', r'\n\n\1', raw_mmd)
+FORMAT_PROMPT = """You are formatting a math worksheet. Below is raw OCR output in Mathpix Markdown.
 
-    # Put each sub-question on its own indented line.
-    # Nougat outputs them as: " a) ...", " b) ...", or " **a**) ...", " **b**) ..."
-    text = re.sub(r' (\*\*[a-z]\*\*\))', r'\n    \1', text)  # bold variant
-    text = re.sub(r' ([a-z]\))', r'\n    \1', text)           # plain variant
+Rules:
+- Add a blank line between each numbered question (1. 2. 3. etc.)
+- Put each sub-question (a) b) c) etc.) on its own line
+- Do not change any math, text, or LaTeX content whatsoever
+- Return ONLY the reformatted Markdown, no explanation
 
-    return text.strip()
+{mmd_content}"""
+
+
+def format_mmd(raw_mmd: str, model: str = None) -> str:
+    """Use Claude to add line breaks and structure to raw nougat .mmd text."""
+    if not shutil.which("claude"):
+        raise RuntimeError("claude CLI not found in PATH.")
+
+    prompt = FORMAT_PROMPT.format(mmd_content=raw_mmd)
+    cmd = ["claude", "-p", prompt]
+    if model:
+        cmd += ["--model", model]
+
+    env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300, env=env)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("claude CLI timed out while formatting .mmd")
+    if result.returncode != 0:
+        raise RuntimeError(f"claude CLI failed:\n{result.stderr.strip()}")
+    return result.stdout.strip()
 
 
 def _image_to_pdf(image_path: str, pdf_path: Path) -> None:
@@ -63,7 +81,18 @@ def _run_nougat(pdf_path: Path, out_dir: Path) -> str:
 
 
 def extract_raw_mmd(image_path: str) -> str:
-    """Step 1: run nougat on an image and return the raw .mmd string."""
+    """Run nougat on an image and return the raw .mmd string.
+
+    Caches the result as <image_stem>.mmd next to the image — if that file
+    already exists, nougat is skipped entirely.
+    """
+    image_path = Path(image_path)
+    cache_path = image_path.with_suffix(".mmd")
+
+    if cache_path.exists():
+        print(f"  Using cached nougat output: {cache_path.name}")
+        return cache_path.read_text(encoding="utf-8").strip()
+
     try:
         from PIL import Image  # noqa: F401
     except ImportError:
@@ -72,7 +101,11 @@ def extract_raw_mmd(image_path: str) -> str:
     with tempfile.TemporaryDirectory(prefix="nougat_") as tmp_dir:
         tmp_dir_path = Path(tmp_dir)
         tmp_pdf = tmp_dir_path / "page.pdf"
-        _image_to_pdf(image_path, tmp_pdf)
-        return _run_nougat(tmp_pdf, tmp_dir_path)
+        _image_to_pdf(str(image_path), tmp_pdf)
+        raw_mmd = _run_nougat(tmp_pdf, tmp_dir_path)
+
+    cache_path.write_text(raw_mmd, encoding="utf-8")
+    print(f"  Saved nougat output to: {cache_path.name}")
+    return raw_mmd
 
 
