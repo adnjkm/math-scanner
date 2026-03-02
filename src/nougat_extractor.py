@@ -23,17 +23,25 @@ def _nougat_bin() -> str:
 
 FORMAT_PROMPT = """You are formatting a math worksheet. Below is raw OCR output in Mathpix Markdown.
 
-Rules:
-- Add a blank line between each numbered question (1. 2. 3. etc.)
-- Put each sub-question (a) b) c) etc.) on its own line
-- Do not change any math, text, or LaTeX content whatsoever
-- Return ONLY the reformatted Markdown, no explanation
+Output pure LaTeX commands (no markdown bold or lists). Rules:
+
+- Start with this YAML front matter:
+  ---
+  header-includes:
+    - \\setlength{{\\parindent}}{{0pt}}
+  ---
+- Format each numbered question flush left as: \\textbf{{1.}} question text
+- Format each lettered sub-question indented as: \\hspace*{{1cm}}\\textbf{{a)}} question text
+- The OCR often labels every sub-question as "a)". Re-label them sequentially (a, b, c, ...) within each numbered question
+- After each sub-question add a blank line then \\vspace{{4cm}} on its own line
+- Do not change any math content whatsoever
+- Return ONLY the reformatted content, no explanation
 
 {mmd_content}"""
 
 
 def format_mmd(raw_mmd: str, model: str = None) -> str:
-    """Use Claude to add line breaks and structure to raw nougat .mmd text."""
+    """Use Claude CLI to add line breaks and structure to raw nougat .mmd text."""
     if not shutil.which("claude"):
         raise RuntimeError("claude CLI not found in PATH.")
 
@@ -42,7 +50,10 @@ def format_mmd(raw_mmd: str, model: str = None) -> str:
     if model:
         cmd += ["--model", model]
 
-    env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+    # Strip env vars that would trigger nested-session blocking
+    blocked = {"CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SESSION_ID"}
+    env = {k: v for k, v in os.environ.items() if k not in blocked}
+
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=300, env=env)
     except subprocess.TimeoutExpired:
