@@ -1,5 +1,6 @@
 """src/claude_extractor.py — Claude vision + LaTeX extraction for a single page image."""
 
+import os
 import shutil
 import subprocess
 
@@ -16,7 +17,6 @@ Layout rules:
 
 - Sub-problems starting with a letter (a., b., a), b) etc.) → typeset as:
     \\hspace{{1cm}}\\textbf{{(a)}} <sub-question in LaTeX math>\\\\[0.2cm]
-    \\hspace{{1cm}}\\rule{{14cm}}{{0.4pt}}
     \\vspace{{Xcm}}
 
   where X = 4 (simple 1-step), 7 (multi-step), 12 (complex/multi-part)
@@ -37,7 +37,8 @@ def extract_page_latex(image_path: str, model: str = None) -> str:
     if model:
         cmd += ["--model", model]
 
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, env=env)
     if result.returncode != 0:
         raise RuntimeError(f"claude CLI failed:\n{result.stderr.strip()}")
 

@@ -1,3 +1,12 @@
 ollama>=0.3.0
 pdf2image>=1.16.3
 Pillow>=10.0.0
+nougat-ocr
+
+# nougat-ocr transitive dependency pins for compatibility
+# transformers>=4.38 added `cache_position` kwarg that breaks nougat's BARTDecoder
+transformers>=4.25.1,<4.38.0
+# albumentations>=2.0 changed ImageCompression API (compression_type expects string not int)
+albumentations>=1.0.0,<2.0.0
+# pypdfium2>=5.0 removed the render() method nougat relies on
+pypdfium2>=4.0.0,<5.0.0

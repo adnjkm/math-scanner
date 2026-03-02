@@ -50,11 +50,6 @@ No separate Anthropic API key is needed.
 .venv/bin/python3 scanner.py textbook.pdf --output my_worksheet.pdf
 ```
 
-**If running from inside a Claude Code session**, unset the nested-session guard first:
-```bash
-unset CLAUDECODE && .venv/bin/python3 scanner.py textbook1.png
-```
-
 Output is written to `output/worksheet.pdf` by default (gitignored).
 
 ---
