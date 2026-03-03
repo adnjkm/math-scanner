@@ -100,26 +100,29 @@ def main() -> None:
     tmp_dir_to_clean = None
 
     try:
-        if suffix == ".pdf":
+        if suffix == ".pdf" and args.backend != "nougat":
             print(f"Converting PDF to images at {args.dpi} DPI...")
             image_paths = pdf_to_images(str(input_path), args.dpi)
             tmp_dir_to_clean = str(Path(image_paths[0]).parent)
             print(f"  {len(image_paths)} page(s) extracted.")
         elif suffix in {".png", ".jpg", ".jpeg", ".gif", ".webp"}:
             image_paths = [str(input_path)]
-        else:
+        elif suffix != ".pdf":
             print(f"Error: unsupported file type '{suffix}'", file=sys.stderr)
             sys.exit(1)
 
         if args.backend == "nougat":
             from src.nougat_extractor import extract_raw_mmd, format_mmd
 
+            # PDF goes straight to nougat; images go through per-file loop
+            nougat_inputs = [str(input_path)] if suffix == ".pdf" else image_paths
+
             page_mmds = []
-            for i, img_path in enumerate(image_paths, start=1):
+            for i, img_path in enumerate(nougat_inputs, start=1):
                 img = Path(img_path)
 
-                # Step 1: nougat OCR — cached as <image>.mmd
-                print(f"Processing page {i}/{len(image_paths)}: running nougat...")
+                # Step 1: nougat OCR — cached as <stem>.mmd
+                print(f"Processing page {i}/{len(nougat_inputs)}: running nougat...")
                 raw_mmd = extract_raw_mmd(img_path)
 
                 # Step 2: Claude formatting — cached as <image>_formatted.mmd

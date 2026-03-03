@@ -81,7 +81,7 @@ def _image_to_pdf(image_path: str, pdf_path: Path) -> None:
 def _run_nougat(pdf_path: Path, out_dir: Path) -> str:
     """Run nougat on a PDF and return the .mmd content."""
     nougat = _nougat_bin()
-    cmd = [nougat, str(pdf_path), "-o", str(out_dir), "--no-skipping"]
+    cmd = [nougat, str(pdf_path), "-o", str(out_dir), "--no-skipping", "-m", "0.1.0-base"]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
     if result.returncode != 0:
         raise RuntimeError(f"nougat failed:\n{result.stderr.strip()}")
@@ -91,29 +91,32 @@ def _run_nougat(pdf_path: Path, out_dir: Path) -> str:
     return mmd_path.read_text(encoding="utf-8").strip()
 
 
-def extract_raw_mmd(image_path: str) -> str:
-    """Run nougat on an image and return the raw .mmd string.
+def extract_raw_mmd(input_path: str) -> str:
+    """Run nougat on a PDF or image and return the raw .mmd string.
 
-    Caches the result as <image_stem>.mmd next to the image — if that file
-    already exists, nougat is skipped entirely.
+    PDFs are passed directly to nougat. Images are first converted to a
+    temporary PDF. Result is cached as <stem>.mmd next to the input file.
     """
-    image_path = Path(image_path)
-    cache_path = image_path.with_suffix(".mmd")
+    input_path = Path(input_path)
+    cache_path = input_path.with_suffix(".mmd")
 
     if cache_path.exists():
         print(f"  Using cached nougat output: {cache_path.name}")
         return cache_path.read_text(encoding="utf-8").strip()
 
-    try:
-        from PIL import Image  # noqa: F401
-    except ImportError:
-        raise RuntimeError("Pillow is required for image-to-PDF conversion.")
-
     with tempfile.TemporaryDirectory(prefix="nougat_") as tmp_dir:
         tmp_dir_path = Path(tmp_dir)
-        tmp_pdf = tmp_dir_path / "page.pdf"
-        _image_to_pdf(str(image_path), tmp_pdf)
-        raw_mmd = _run_nougat(tmp_pdf, tmp_dir_path)
+
+        if input_path.suffix.lower() == ".pdf":
+            raw_mmd = _run_nougat(input_path, tmp_dir_path)
+        else:
+            try:
+                from PIL import Image  # noqa: F401
+            except ImportError:
+                raise RuntimeError("Pillow is required for image-to-PDF conversion.")
+            tmp_pdf = tmp_dir_path / "page.pdf"
+            _image_to_pdf(str(input_path), tmp_pdf)
+            raw_mmd = _run_nougat(tmp_pdf, tmp_dir_path)
 
     cache_path.write_text(raw_mmd, encoding="utf-8")
     print(f"  Saved nougat output to: {cache_path.name}")
